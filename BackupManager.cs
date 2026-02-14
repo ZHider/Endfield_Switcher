@@ -90,7 +90,7 @@ namespace Endfield_Switcher
 
             using (var sha256 = System.Security.Cryptography.SHA256.Create())
             {
-                using (var stream = File.OpenRead(filePath))
+                using (var stream = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
                 {
                     var hashBytes = sha256.ComputeHash(stream);
                     return BitConverter.ToString(hashBytes).Replace("-", "").ToLowerInvariant();
@@ -117,8 +117,11 @@ namespace Endfield_Switcher
                 string destFile = Path.Combine(tagetdir, file);
                 if (File.Exists(sourceFile))
                 {
-
-                    File.Copy(sourceFile, destFile, true);
+                    using (var inputStream = new FileStream(sourceFile, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
+                    using (var outputStream = new FileStream(destFile, FileMode.Create))
+                    {
+                        inputStream.CopyTo(outputStream);
+                    }
                     if (file == "login_cache") Hash = ComputeFileHash(sourceFile);//计算主文件的哈希值
                 }
             }

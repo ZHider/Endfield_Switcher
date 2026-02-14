@@ -75,31 +75,22 @@ namespace Endfield_Switcher
         private void BtnSave_Click(object sender, RoutedEventArgs e)
         {
             string processName = "Endfield";
-            var runningProcesses = System.Diagnostics.Process.GetProcessesByName(processName);
-            if (runningProcesses.Length == 0)
-            {
+          
                 var Dialog = new InputDialog();
-                if (Dialog.ShowDialog() == true)
+            if (Dialog.ShowDialog() == true)
+            {
+                string note = Dialog.InputText;
+                try
                 {
-                    string note = Dialog.InputText;
-                    try
-                    {
-                        _backupManager.BackupAccount(note);
-                        RefreshList();
-                        CheckCurrentStatus();
-
-                    }
-                    catch (Exception ex)
-                    {
-                        HandyControl.Controls.MessageBox.Show($"保存失败：{ex.Message}", "错误", MessageBoxButton.OK, MessageBoxImage.Error);
-                    }
-
+                    _backupManager.BackupAccount(note);
+                    RefreshList();
+                    CheckCurrentStatus();
 
                 }
-            }
-            else
-            {
-                HandyControl.Controls.MessageBox.Show("请先关闭游戏再进行备份操作！", "错误", MessageBoxButton.OK, MessageBoxImage.Error);
+                catch (Exception ex)
+                {
+                    HandyControl.Controls.MessageBox.Show($"保存失败：{ex.Message}", "错误", MessageBoxButton.OK, MessageBoxImage.Error);
+                }
 
 
             }
