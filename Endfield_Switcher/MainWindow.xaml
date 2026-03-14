@@ -26,10 +26,11 @@
 
             <ListView.Resources>
                 <ResourceDictionary>
-                    <ContextMenu x:Key="ItemContextMenu">
-                    <MenuItem Header="修改备注" Click="Rename_Click"/>
-                    <MenuItem Header="删除存档" Click="BtnDelete_Click"/>
-                </ContextMenu>
+                    <ContextMenu x:Key="ItemContextMenu" Width="150">
+                        <MenuItem Header="修改备注" Click="Rename_Click"/>
+                        <MenuItem Header="删除存档" Click="BtnDelete_Click"/>
+                        <MenuItem Header="取消选中" Click="Unselected_Click"/>
+                    </ContextMenu>
                 </ResourceDictionary>
             </ListView.Resources>
 

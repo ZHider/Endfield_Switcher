@@ -11,7 +11,7 @@ namespace Endfield_Switcher
     public class BackupManager
     {
         public readonly string _gameDataPath;//游戏数据路径
-        private readonly string _baseDir; //程序运行目录
+        private readonly string _baseDir = AppDomain.CurrentDomain.BaseDirectory; //程序运行目录
         private readonly string _backupPath; //备份路径
         private readonly string _indexFilePath;//json索引文件路径
 
@@ -20,35 +20,18 @@ namespace Endfield_Switcher
 
         public BackupManager()
         { //这个构造函数的作用是检查路径以及是否有备份的文件夹，如果没有就创建一个，并且检查游戏数据路径是否存在，如果不存在就抛出异常提示用户。
-            _baseDir = AppDomain.CurrentDomain.BaseDirectory;
-            _backupPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Backups");//备份路径
+            _backupPath = Path.Combine(_baseDir, "Backups");//备份路径
 
             if (!Directory.Exists(_backupPath))
             {
                 Directory.CreateDirectory(_backupPath);
             }
-            string appdata = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-            string localdata = Path.Combine(appdata, "AppData", "Local", "Hypergryph", "Endfield");
 
-            if (Directory.Exists(localdata))
-            {
-                _gameDataPath = FindLoginData(localdata);//游戏数据路径
-            }
-
-            else if (Directory.Exists(Path.Combine(appdata, "AppData", "LocalLow", "Hypergryph", "Endfield")))
-            {
-                _gameDataPath = FindLoginData(Path.Combine(appdata, "AppData", "LocalLow", "Hypergryph", "Endfield"));//游戏数据路径
-            }
-            if (_gameDataPath == string.Empty)
-            {
-                throw new DirectoryNotFoundException("未找到登录数据目录，请确保游戏已安装并至少运行过一次。");
-            }
-
-            _baseDir = AppDomain.CurrentDomain.BaseDirectory;
-
+            _gameDataPath = GameLocator.FindGameDataPath();
             _indexFilePath = Path.Combine(_baseDir, "accounts.json");
             LoadAccount();
         }
+
 
         public void LoadAccount()
         {
@@ -137,21 +120,6 @@ namespace Endfield_Switcher
 
             Accounts.Insert(0, newaccount); //将新的备份信息插入到列表的开头
             SaveJson();
-        }
-
-        private string FindLoginData(string Paths)
-        {
-            var target = Directory.EnumerateDirectories(Paths, "sdk*");
-            foreach (var dir in target)
-            {
-                bool loginFile = Directory.EnumerateFiles(dir, "login_cache").Any();
-                if (loginFile)
-                {
-                    return dir;
-                }
-            }
-
-            return string.Empty;
         }
 
         public void SwitchAccount(AccountInfo account)
