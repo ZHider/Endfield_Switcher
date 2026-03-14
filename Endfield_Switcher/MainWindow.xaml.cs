@@ -1,11 +1,14 @@
-﻿using System;
+﻿using HandyControl.Controls;
+using System;
 using System.Collections.Generic;
-using System.Linq;
+using System.Diagnostics;
 using System.IO;
+using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 
 
 namespace Endfield_Switcher
@@ -66,81 +69,156 @@ namespace Endfield_Switcher
         private void LoadGamePath()
         {// 加载游戏路径到文本框
             string gamePath = Properties.Settings.Default.GameExePath;
-            if (!string.IsNullOrEmpty(gamePath))
+            if (string.IsNullOrEmpty(gamePath))
             {
-                TxtGamePath.Text = gamePath;
+                // 尝试自动查找游戏位置
+                gamePath = GameLocator.TryFindGameExePath();
+                if (!string.IsNullOrEmpty(gamePath))
+                {
+                    Properties.Settings.Default.GameExePath = gamePath;
+                    Properties.Settings.Default.Save();
+                }
             }
+            if (!string.IsNullOrEmpty(gamePath))
+                TxtGamePath.Text = gamePath;
+
         }
 
         private void BtnSave_Click(object sender, RoutedEventArgs e)
         {
-            string processName = "Endfield";
-          
-                var Dialog = new InputDialog();
-            if (Dialog.ShowDialog() == true)
+            var selectedItem = AccountList.SelectedItem as AccountInfo;
+
+            // 情况 1：已选中项目 → 询问是否覆盖
+            if (selectedItem != null)
             {
-                string note = Dialog.InputText;
+                var result = HandyControl.Controls.MessageBox.Show(
+                    "您已经选择了一个项目，要替换它吗？", "确认",
+                    MessageBoxButton.YesNoCancel,
+                    MessageBoxImage.Asterisk,
+                    MessageBoxResult.No);
+
+                if (result == MessageBoxResult.Cancel)
+                    return;
+
+                if (result == MessageBoxResult.Yes)
+                {
+                    ReplaceExistingAccount(selectedItem);
+                    return; // 替换完成，无需新建
+                }
+                // 如果是 No，则继续执行“新建”逻辑（等效于未选中）
+            }
+
+            // 情况 2：未选中 或 用户选择“No” → 新建备份
+            string note = ShowInputDialog();
+            if (note != null)
+                CreateNewBackup(note);
+
+
+            void ReplaceExistingAccount(AccountInfo account)
+            {
                 try
                 {
-                    _backupManager.BackupAccount(note);
+                    _backupManager.BackupAccount(account.DisplayName);
+                    _backupManager.DeleteAccount(account);
                     RefreshList();
                     CheckCurrentStatus();
-
                 }
                 catch (Exception ex)
                 {
-                    HandyControl.Controls.MessageBox.Show($"保存失败：{ex.Message}", "错误", MessageBoxButton.OK, MessageBoxImage.Error);
+                    ShowError($"保存失败：{ex.Message}");
                 }
+            }
 
+            void CreateNewBackup(string _note)
+            {
+                try
+                {
+                    _backupManager.BackupAccount(_note);
+                    RefreshList();
+                    CheckCurrentStatus();
+                }
+                catch (Exception ex)
+                {
+                    ShowError($"保存失败：{ex.Message}");
+                }
+            }
 
+            string ShowInputDialog()
+            {
+                var dialog = new InputDialog();
+                return dialog.ShowDialog() == true ? dialog.InputText : null;
+            }
+
+            void ShowError(string message)
+            {
+                HandyControl.Controls.MessageBox.Show(
+                    message, "错误",
+                    MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
 
 
         private void BtnSwitch_Click(object sender, RoutedEventArgs e)
         {
-            var selected = AccountList.SelectedItem as AccountInfo;
-            string processName = "Endfield";
-            var runningProcesses = System.Diagnostics.Process.GetProcessesByName(processName);
-            if(runningProcesses.Length > 0)
+            // 1. 验证前置条件
+            if (Util.IsGameRunning("Endfield"))
             {
-                HandyControl.Controls.MessageBox.Show("请先关闭游戏再进行切换操作！", "错误", MessageBoxButton.OK, MessageBoxImage.Error);
+                Util.ShowError("请先关闭游戏再进行切换操作！");
                 return;
             }
+
+            var selected = AccountList.SelectedItem as AccountInfo;
             if (selected == null)
             {
-                HandyControl.Controls.MessageBox.Show("请先选择一个账户！", "错误", MessageBoxButton.OK, MessageBoxImage.Error);
+                Util.ShowError("请先选择一个账户！");
                 return;
             }
+
+            // 2. 执行切换
             try
             {
                 _backupManager.SwitchAccount(selected);
-                var result = HandyControl.Controls.MessageBox.Show("切换成成功是否立即启动游戏？", "成功", MessageBoxButton.YesNo, MessageBoxImage.Information);
-                if (result == MessageBoxResult.Yes)
-                {
-                    if (TxtGamePath == null)
-                    {
-                        HandyControl.Controls.MessageBox.Show("你的游戏路径尚未设置请先设置游戏路径", "提示", MessageBoxButton.OK, MessageBoxImage.Warning);
-                        CheckCurrentStatus();
-                        return;
-
-                    }
-                    System.Diagnostics.Process.Start(TxtGamePath.Text);
-                }
-                CheckCurrentStatus();
-
             }
             catch (Exception ex)
             {
-                HandyControl.Controls.MessageBox.Show($"切换失败：{ex.Message}", "错误");
+                Util.ShowError($"切换失败：{ex.Message}");
+                return;
+            }
+
+            // 3. 切换成功后询问是否启动游戏
+            var result = Util.ChooseQuestion("切换成功！是否立即启动游戏？");
+            if (result != MessageBoxResult.Yes)
+            {
+                CheckCurrentStatus();
+                return;
+            }
+
+            // 4. 启动游戏（需有效路径）
+            string gamePath = TxtGamePath.Text;
+            if (!Util.IsValidGamePath(gamePath))
+            {
+                Util.ShowWarning("你的游戏路径尚未设置，请先设置游戏路径。");
+                CheckCurrentStatus();
+                return;
+            }
+
+            try
+            {
+                Process.Start(gamePath);
+                CheckCurrentStatus();
+            }
+            catch (Exception ex)
+            {
+                Util.ShowError($"无法启动游戏：{ex.Message}");
+                CheckCurrentStatus();
             }
         }
 
         private void BtnDelete_Click(object sender, RoutedEventArgs e)
         {
             var selected = AccountList.SelectedItem as AccountInfo;
-            if (selected == null) return;
-            if (HandyControl.Controls.MessageBox.Show("确定要删除该账户备份吗？", "确认", MessageBoxButton.YesNo, MessageBoxImage.Warning) == MessageBoxResult.Yes)
+            if (selected != null
+                && Util.ChooseWarning("确定要删除该账户备份吗？") == MessageBoxResult.Yes)
             {
                 try
                 {
@@ -150,7 +228,7 @@ namespace Endfield_Switcher
                 }
                 catch (Exception ex)
                 {
-                    HandyControl.Controls.MessageBox.Show($"删除失败：{ex.Message}", "错误", MessageBoxButton.OK, MessageBoxImage.Error);
+                    Util.ShowError($"删除失败：{ex.Message}");
                 }
             }
         }
@@ -176,21 +254,26 @@ namespace Endfield_Switcher
         // 方法必须在这个类里面
         public void Rename_Click(object sender, RoutedEventArgs e)
         {
-          
             if (sender is System.Windows.Controls.MenuItem menuItem && menuItem.DataContext is AccountInfo account)
             {
-
                 var dialog = new InputDialog("修改备注", "请输入新的备注名：", account.DisplayName);
                 if (dialog.ShowDialog() == true)
                 {
                     account.DisplayName = dialog.InputText;
-
-
                     _backupManager.RenameAccount();
                     RefreshList();
                 }
             }
 
+        }
+
+        public void Unselected_Click(object sender, RoutedEventArgs e)
+        {
+
+            if (sender is System.Windows.Controls.MenuItem menuItem && menuItem.DataContext is AccountInfo account)
+            {
+                AccountList.SelectedItem = null;
+            }
         }
 
     }
